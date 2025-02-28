@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:math';
 import 'package:flutter_vector_icons/flutter_vector_icons.dart';
 import 'package:sign/core/theme/app_colors.dart';
@@ -9,6 +10,8 @@ import 'package:sign/features/requests/data/repositories/request_repository_impl
 import 'package:sign/features/requests/domain/entities/request_entity.dart';
 import 'package:sign/features/requests/domain/usecases/get_requests_usecase.dart';
 import 'package:sign/features/requests/domain/usecases/save_request_usecase.dart';
+import 'package:sign/features/requests/presentation/pdf_preview_card.dart';
+import 'package:flutter_doc_scanner/flutter_doc_scanner.dart';
 
 class RequestsPage extends StatefulWidget {
   const RequestsPage({super.key});
@@ -67,10 +70,11 @@ class _RequestsPageState extends State<RequestsPage> {
       String fileName = result.files.single.name;
 
       // Guardar en base de datos
+      final bool flag = Random().nextBool();
       RequestEntity newRequest = RequestEntity(
         nameFile: fileName,
-        isSign: false,
-        dateSign: null,
+        isSign: flag,
+        dateSign: flag ? DateTime.now() : null,
         urlFile: filePath,
       );
 
@@ -84,6 +88,47 @@ class _RequestsPageState extends State<RequestsPage> {
       });
     } else {
       //Selección cancelada.
+    }
+  }
+
+  Future<void> scanPDF() async {
+    try {
+      // 1. Escanear el documento y obtener la ruta del PDF
+      dynamic scannedPdf = await FlutterDocScanner().getScannedDocumentAsPdf();
+
+      if (scannedPdf is Map && scannedPdf.containsKey('pdfUri')) {
+        String filePath =
+            Uri.parse(scannedPdf['pdfUri']).toFilePath(); // Extraer ruta real
+        String fileName =
+            filePath.split('/').last; // Obtener solo el nombre del archivo
+
+        // 2. Generar los datos de la solicitud
+        final bool flag = Random().nextBool();
+        RequestEntity newRequest = RequestEntity(
+          nameFile: fileName,
+          isSign: flag,
+          dateSign: flag ? DateTime.now() : null,
+          urlFile: filePath, // Guardamos la ruta del PDF
+        );
+
+        // 3. Guardar la solicitud en la base de datos
+        await SaveRequestUseCase(
+          RequestRepositoryImpl(RequestLocalDatasource()),
+        )(newRequest);
+
+        // 4. Actualizar la lista de solicitudes
+        setState(() {
+          requestsFuture = fetchRequests();
+        });
+
+        print("Documento guardado en: $filePath");
+      } else {
+        print("No se pudo obtener el PDF.");
+      }
+    } on PlatformException catch (e) {
+      print("Error al escanear el documento: $e");
+    } catch (e) {
+      print("Error inesperado: $e");
     }
   }
 
@@ -124,23 +169,13 @@ class _RequestsPageState extends State<RequestsPage> {
               itemCount: requests.length,
               itemBuilder: (context, index) {
                 final request = requests[index];
-                return Card(
-                  elevation: 4.0,
-                  margin: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: ListTile(
-                    leading: Icon(
-                      MaterialCommunityIcons.file_pdf_box,
-                      color: AppColors.secondary,
-                    ),
-                    title: Text(
-                      request.nameFile,
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(request.urlFile),
-                    onTap: () {
-                      print("Abrir PDF: ${request.urlFile}");
-                    },
-                  ),
+                return PDFPreviewCard(
+                  request: request,
+                  onRequestDeleted: () async {
+                    setState(() {
+                      requestsFuture = fetchRequests();
+                    });
+                  },
                 );
               },
             );
@@ -210,7 +245,7 @@ class _RequestsPageState extends State<RequestsPage> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(50.0),
                           ),
-                          onPressed: () => fetchRequests(),
+                          onPressed: () => showAlert("Botón ${1 + 1}"),
                           child: Icon(MaterialCommunityIcons.image, size: 25.0),
                         ),
                       ),
@@ -242,7 +277,7 @@ class _RequestsPageState extends State<RequestsPage> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(50.0),
                           ),
-                          onPressed: () => showAlert("Botón ${2 + 1}"),
+                          onPressed: () => scanPDF(),
                           child: Icon(
                             MaterialCommunityIcons.camera,
                             size: 25.0,

@@ -16,4 +16,9 @@ class RequestRepositoryImpl implements RequestRepository {
   Future<List<RequestEntity>> getRequests() async {
     return await datasource.getRequests();
   }
+
+  @override
+  Future<void> deleteRequest(int idRequest) async {
+    await datasource.deleteRequest(idRequest);
+  }
 }

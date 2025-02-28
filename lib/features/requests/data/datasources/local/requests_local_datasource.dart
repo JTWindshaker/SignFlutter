@@ -60,6 +60,7 @@ class RequestLocalDatasource {
 
     return List.generate(maps.length, (i) {
       return RequestEntity(
+        id: maps[i]['id'],
         nameFile: maps[i]['nameFile'],
         isSign: maps[i]['isSign'] == 1,
         dateSign:
@@ -69,5 +70,10 @@ class RequestLocalDatasource {
         urlFile: maps[i]['urlFile'],
       );
     });
+  }
+
+  Future<void> deleteRequest(int idRequest) async {
+    final db = await database;
+    await db.delete('request', where: 'id = ?', whereArgs: [idRequest]);
   }
 }
